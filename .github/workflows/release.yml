@@ -3,6 +3,9 @@ name: Release Build
 on:
   release:
     types: [published]
+  push:
+    branches:
+      - feat/add-release-files-to-release-tag
 
 jobs:
   build:
@@ -81,6 +84,7 @@ jobs:
         shell: bash
 
       - name: Upload Release Asset
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
         with:
           files: ${{ env.FILENAME }}
