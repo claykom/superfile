@@ -1,0 +1,88 @@
+name: Release Build
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            ext: tar.gz
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            ext: tar.gz
+          - os: macos-latest
+            goos: darwin
+            ext: tar.gz
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            ext: tar.gz
+          - os: windows-latest
+            goos: windows
+            ext: zip
+          - os: windows-latest
+            goos: windows
+            goarch: arm64
+            ext: zip
+    env:
+      GO111MODULE: on
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.4'
+
+      - name: Set up variables
+        id: vars
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          GOARCH=${{ matrix.goarch || 'amd64' }}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "goarch=$GOARCH" >> $GITHUB_OUTPUT
+
+      - name: Build
+        run: |
+          BINARY=spf
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY=spf.exe
+          fi
+          GOOS=${{ matrix.goos }} GOARCH=${{ steps.vars.outputs.goarch }} go build -o $BINARY main.go
+
+      - name: Prepare Archive Structure
+        run: |
+          ARCHIVE_NAME=superfile-${{ matrix.goos }}-v${{ steps.vars.outputs.version }}-${{ steps.vars.outputs.goarch }}
+          mkdir -p dist/$ARCHIVE_NAME
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            mv spf.exe dist/$ARCHIVE_NAME/spf.exe
+          else
+            mv spf dist/$ARCHIVE_NAME/spf
+          fi
+          echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
+
+      - name: Archive
+        run: |
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            7z a $ARCHIVE_NAME.zip dist
+            echo "FILENAME=$ARCHIVE_NAME.zip" >> $GITHUB_ENV
+          else
+            tar -czf $ARCHIVE_NAME.tar.gz dist
+            echo "FILENAME=$ARCHIVE_NAME.tar.gz" >> $GITHUB_ENV
+          fi
+        shell: bash
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.FILENAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
